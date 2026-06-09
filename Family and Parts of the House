@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>My Family and My House - Kindergarten Puzzle Game</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts for friendly rounded typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Fredoka', system-ui, -apple-system, sans-serif;
+      touch-action: none;
+      background: radial-gradient(circle, #eefcff 0%, #d2f4ff 100%);
+      overflow: hidden;
+    }
+    /* Fixed 16:9 responsive wrapper */
+    .game-container {
+      aspect-ratio: 16 / 9;
+      width: 100%;
+      max-width: 1100px;
+      max-height: 100vh;
+      position: relative;
+    }
+    .draggable {
+      touch-action: none;
+      cursor: grab;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .draggable:active {
+      cursor: grabbing;
+      transform: scale(1.1);
+      z-index: 50;
+    }
+    .dropzone-active {
+      filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.8));
+    }
+    /* Custom animation for matching feedback */
+    @keyframes bounce-pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .pop-success {
+      animation: bounce-pop 0.5s ease-out forwards;
+    }
+    @keyframes shake-error {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .shake-fail {
+      animation: shake-error 0.4s ease-out;
+    }
+    /* Prevent image/svg blue highlights on drag */
+    img, svg {
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center p-2 md:p-4">
+
+  <!-- Main Game Container preserving 16:9 -->
+  <div id="gameWindow" class="game-container bg-white rounded-3xl shadow-2xl border-8 border-yellow-300 flex flex-col justify-between overflow-hidden relative select-none">
+    
+    <!-- Top HUD Navigation Bar -->
+    <header class="bg-gradient-to-r from-pink-400 via-yellow-300 to-green-400 p-3 flex justify-between items-center border-b-4 border-yellow-200">
+      <!-- Title & Speaker -->
+      <div class="flex items-center space-x-3">
+        <button onclick="speakInstructions()" class="bg-white p-2 rounded-full shadow hover:bg-yellow-100 transition transform hover:scale-105" title="Hear Voice Instructions">
+          <!-- Speaker Icon -->
+          <svg class="w-7 h-7 text-pink-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M12 18.75V5.25L7.75 9.5H4.5v5h3.25L12 18.75z" />
+          </svg>
+        </button>
+        <span class="text-xl md:text-3xl font-extrabold text-purple-800 tracking-wide drop-shadow-sm">My Family & My House</span>
+      </div>
+
+      <!-- Current Goal Message Bubbles -->
+      <div id="hintBubble" class="hidden md:flex bg-white px-4 py-1.5 rounded-full border-2 border-purple-300 text-purple-700 font-semibold text-sm shadow-inner animate-bounce">
+        Let's assemble the house elements!
+      </div>
+
+      <!-- Controls & Points Info -->
+      <div class="flex items-center space-x-3">
+        <!-- Stars Count -->
+        <div class="bg-white/80 px-3 py-1 rounded-full flex items-center space-x-1.5 font-bold text-yellow-600 border border-yellow-300 shadow-sm">
+          <svg class="w-6 h-6 fill-current text-yellow-400" viewBox="0 0 24 24">
+            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+          </svg>
+          <span id="scoreDisplay" class="text-lg md:text-xl">0</span>
+        </div>
+
+        <!-- Music Toggle -->
+        <button id="musicToggle" class="bg-indigo-100 p-2 rounded-full hover:bg-indigo-200 border border-indigo-300 transition" onclick="toggleMusic()">
+          <!-- Music Note SVG -->
+          <svg id="musicOnIcon" class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+          <svg id="musicOffIcon" class="w-6 h-6 text-red-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Dynamic Level Playboard -->
+    <main class="flex-grow flex p-3 md:p-6 relative overflow-hidden" id="levelContainer">
+      <!-- LEVEL 1: BUILD THE HOUSE -->
+      <div id="level1" class="w-full h-full flex flex-row items-center justify-between space-x-4">
+        
+        <!-- Drag Item Dock (Left Side) -->
+        <div class="w-1/3 bg-orange-50 border-4 border-dashed border-orange-300 rounded-2xl p-4 flex flex-col justify-around items-center h-full shadow-inner">
+          <h3 class="text-orange-600 font-extrabold text-base md:text-lg mb-2 text-center">Grab House Parts!</h3>
+          
+          <div class="flex flex-wrap gap-4 items-center justify-center w-full">
+            <!-- Roof Card -->
+            <div id="drag-roof" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-orange-200 flex flex-col items-center justify-center w-24 h-24 md:w-32 md:h-32" data-target="zone-roof">
+              <svg class="w-16 h-12 md:w-20 md:h-16" viewBox="0 0 100 60">
+                <polygon points="50,5 5,55 95,55" fill="#f87171" stroke="#dc2626" stroke-width="3" />
+                <polygon points="50,15 20,50 80,50" fill="#ef4444" />
+              </svg>
+              <span class="text-xs md:text-sm font-bold text-gray-700 mt-1">Roof</span>
+            </div>
+
+            <!-- Walls Card -->
+            <div id="drag-walls" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-orange-200 flex flex-col items-center justify-center w-24 h-24 md:w-32 md:h-32" data-target="zone-walls">
+              <svg class="w-12 h-12 md:w-16 md:h-16" viewBox="0 0 100 100">
+                <rect x="10" y="10" width="80" height="80" fill="#fef08a" stroke="#ca8a04" stroke-width="4" rx="5" />
+                <line x1="10" y1="50" x2="90" y2="50" stroke="#facc15" stroke-width="2" />
+                <line x1="50" y1="10" x2="50" y2="90" stroke="#facc15" stroke-width="2" />
+              </svg>
+              <span class="text-xs md:text-sm font-bold text-gray-700 mt-1">Walls</span>
+            </div>
+
+            <!-- Door Card -->
+            <div id="drag-door" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-orange-200 flex flex-col items-center justify-center w-24 h-24 md:w-32 md:h-32" data-target="zone-door">
+              <svg class="w-10 h-14 md:w-14 md:h-20" viewBox="0 0 60 100">
+                <rect x="5" y="5" width="50" height="90" fill="#b45309" stroke="#78350f" stroke-width="4" rx="3" />
+                <circle cx="45" cy="50" r="5" fill="#fbbf24" />
+              </svg>
+              <span class="text-xs md:text-sm font-bold text-gray-700 mt-1">Door</span>
+            </div>
+
+            <!-- Window Card -->
+            <div id="drag-window" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-orange-200 flex flex-col items-center justify-center w-24 h-24 md:w-32 md:h-32" data-target="zone-window">
+              <svg class="w-12 h-12 md:w-16 md:h-16" viewBox="0 0 80 80">
+                <rect x="5" y="5" width="70" height="70" fill="#60a5fa" stroke="#2563eb" stroke-width="4" rx="4" />
+                <line x1="40" y1="5" x2="40" y2="75" stroke="#ffffff" stroke-width="3" />
+                <line x1="5" y1="40" x2="75" y2="40" stroke="#ffffff" stroke-width="3" />
+              </svg>
+              <span class="text-xs md:text-sm font-bold text-gray-700 mt-1">Window</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Silhouette Target Canvas (Right Side) -->
+        <div class="w-2/3 h-full flex items-center justify-center relative bg-sky-100 rounded-2xl border-4 border-sky-300 overflow-hidden shadow-inner">
+          <!-- Sky Background Details -->
+          <div class="absolute top-4 left-6 bg-white opacity-80 rounded-full w-20 h-8"></div>
+          <div class="absolute top-10 right-10 bg-white opacity-80 rounded-full w-24 h-10"></div>
+          
+          <!-- Silhouette Layout of House -->
+          <div class="relative w-full h-full flex flex-col justify-end items-center pb-8">
+            <!-- Roof Shadow Dropzone -->
+            <div id="zone-roof" class="dropzone absolute bottom-36 w-60 h-32 flex items-center justify-center border-4 border-dashed border-gray-400 bg-gray-200/50 rounded-lg" data-filled="false" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);">
+              <span class="text-gray-600 font-bold text-sm pointer-events-none">Drop Roof Here</span>
+            </div>
+
+            <!-- Walls Shadow Dropzone -->
+            <div id="zone-walls" class="dropzone absolute bottom-6 w-52 h-36 flex items-center justify-center border-4 border-dashed border-gray-400 bg-gray-200/50 rounded-lg" data-filled="false">
+              <span class="text-gray-600 font-bold text-sm pointer-events-none">Drop Walls Here</span>
+            </div>
+
+            <!-- Window Shadow Dropzone -->
+            <div id="zone-window" class="dropzone absolute bottom-16 left-[calc(50%-85px)] w-16 h-16 flex items-center justify-center border-4 border-dashed border-gray-400 bg-gray-200/50 rounded-lg z-10" data-filled="false">
+              <span class="text-gray-500 font-bold text-2xs text-center pointer-events-none">Drop Window</span>
+            </div>
+
+            <!-- Door Shadow Dropzone -->
+            <div id="zone-door" class="dropzone absolute bottom-6 right-[calc(50%-85px)] w-14 h-24 flex items-center justify-center border-4 border-dashed border-gray-400 bg-gray-200/50 rounded-lg z-10" data-filled="false">
+              <span class="text-gray-500 font-bold text-2xs text-center pointer-events-none">Drop Door</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- LEVEL 2: MEET THE FAMILY (Hidden by default) -->
+      <div id="level2" class="w-full h-full hidden flex-row items-center justify-between space-x-4">
+        
+        <!-- Drag Item Dock (Left Side) -->
+        <div class="w-1/3 bg-pink-50 border-4 border-dashed border-pink-300 rounded-2xl p-4 flex flex-col justify-around items-center h-full shadow-inner">
+          <h3 class="text-pink-600 font-extrabold text-base md:text-lg mb-1 text-center">Drag to their Room!</h3>
+          
+          <div class="flex flex-wrap gap-2 md:gap-4 items-center justify-center w-full">
+            <!-- Mom -->
+            <div id="drag-mom" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-pink-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-kitchen">
+              <!-- Cute Mom SVG -->
+              <svg class="w-12 h-12 md:w-14 md:h-14" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#fbcfe8" stroke="#db2777" stroke-width="2"/>
+                <!-- Hair buns -->
+                <circle cx="25" cy="25" r="12" fill="#4a044e" />
+                <circle cx="75" cy="25" r="12" fill="#4a044e" />
+                <circle cx="50" cy="45" r="28" fill="#4a044e" />
+                <circle cx="50" cy="52" r="22" fill="#fbcfe8" />
+                <!-- Eyes -->
+                <circle cx="42" cy="48" r="3" fill="#1e1b4b" />
+                <circle cx="58" cy="48" r="3" fill="#1e1b4b" />
+                <!-- Smile -->
+                <path d="M 44 58 Q 50 64 56 58" stroke="#db2777" stroke-width="3" fill="none" stroke-linecap="round" />
+                <!-- Apron -->
+                <path d="M 38 72 L 62 72 L 58 85 L 42 85 Z" fill="#ec4899" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Mom</span>
+            </div>
+
+            <!-- Dad -->
+            <div id="drag-dad" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-pink-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-living">
+              <!-- Cute Dad SVG -->
+              <svg class="w-12 h-12 md:w-14 md:h-14" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#ffedd5" stroke="#ea580c" stroke-width="2" />
+                <!-- Hair -->
+                <path d="M 20 40 Q 50 15 80 40 Q 50 25 20 40" fill="#451a03" />
+                <!-- Glasses -->
+                <rect x="30" y="42" width="16" height="12" rx="2" fill="none" stroke="#ea580c" stroke-width="3" />
+                <rect x="54" y="42" width="16" height="12" rx="2" fill="none" stroke="#ea580c" stroke-width="3" />
+                <line x1="46" y1="48" x2="54" y2="48" stroke="#ea580c" stroke-width="3" />
+                <!-- Eyes inside glasses -->
+                <circle cx="38" cy="48" r="2.5" fill="#111" />
+                <circle cx="62" cy="48" r="2.5" fill="#111" />
+                <!-- Smile -->
+                <path d="M 43 62 Q 50 68 57 62" stroke="#ea580c" stroke-width="3" fill="none" stroke-linecap="round" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Dad</span>
+            </div>
+
+            <!-- Sister -->
+            <div id="drag-sister" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-pink-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-bedroom">
+              <!-- Cute Sister SVG -->
+              <svg class="w-12 h-12 md:w-14 md:h-14" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#fef3c7" stroke="#b45309" stroke-width="2" />
+                <!-- Hair Pigtails -->
+                <circle cx="15" cy="35" r="12" fill="#b45309" />
+                <circle cx="85" cy="35" r="12" fill="#b45309" />
+                <path d="M 22 45 Q 50 25 78 45" fill="#d97706" />
+                <!-- Eyes -->
+                <circle cx="42" cy="50" r="3" fill="#111" />
+                <circle cx="58" cy="50" r="3" fill="#111" />
+                <!-- Rosy Cheeks -->
+                <circle cx="35" cy="58" r="4" fill="#f43f5e" opacity="0.5" />
+                <circle cx="65" cy="58" r="4" fill="#f43f5e" opacity="0.5" />
+                <!-- Smile -->
+                <path d="M 45 60 Q 50 66 55 60" stroke="#b45309" stroke-width="2.5" fill="none" stroke-linecap="round" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Sister</span>
+            </div>
+
+            <!-- Puppy -->
+            <div id="drag-puppy" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-pink-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-garden">
+              <!-- Cute Puppy SVG -->
+              <svg class="w-12 h-12 md:w-14 md:h-14" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="#f5e0c3" stroke="#78350f" stroke-width="2" />
+                <!-- Ears -->
+                <ellipse cx="20" cy="40" rx="10" ry="20" fill="#78350f" transform="rotate(15 20 40)"/>
+                <ellipse cx="80" cy="40" rx="10" ry="20" fill="#78350f" transform="rotate(-15 80 40)"/>
+                <!-- Eyes -->
+                <circle cx="40" cy="48" r="4.5" fill="#111" />
+                <circle cx="60" cy="48" r="4.5" fill="#111" />
+                <!-- Nose -->
+                <polygon points="46,56 54,56 50,61" fill="#78350f" />
+                <!-- Tongue -->
+                <path d="M 47 64 Q 50 72 53 64 Z" fill="#f43f5e" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Puppy</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Four-Room House Playboard (Right Side) -->
+        <div class="w-2/3 h-full grid grid-cols-2 grid-rows-2 gap-2 p-1 bg-yellow-100 rounded-2xl border-4 border-yellow-400 overflow-hidden relative shadow-inner">
+          
+          <!-- Kitchen Room Dropzone -->
+          <div id="zone-kitchen" class="dropzone bg-rose-50 border-4 border-dashed border-rose-300 rounded-xl relative flex flex-col items-center justify-between p-2" data-filled="false">
+            <span class="bg-rose-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Kitchen</span>
+            <div class="absolute bottom-2 right-2 opacity-30">
+              <!-- Cooker/Oven silhouette -->
+              <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-9 14H6v-6h4v6zm8 0h-6v-2h6v2zm0-4h-6v-2h6v2z"/></svg>
+            </div>
+            <span class="text-xs text-rose-500 font-bold m-auto text-center pointer-events-none">Mom is hungry!<br>Where is the kitchen?</span>
+          </div>
+
+          <!-- Living Room Dropzone -->
+          <div id="zone-living" class="dropzone bg-blue-50 border-4 border-dashed border-blue-300 rounded-xl relative flex flex-col items-center justify-between p-2" data-filled="false">
+            <span class="bg-blue-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Living Room</span>
+            <div class="absolute bottom-2 right-2 opacity-30">
+              <!-- Armchair/TV silhouette -->
+              <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.9-.9 1.9-2L23 5c0-1.1-.9-2-2-2zm-2 12H5V5h14v10z"/></svg>
+            </div>
+            <span class="text-xs text-blue-500 font-bold m-auto text-center pointer-events-none">Dad wants to sit on the cozy sofa!</span>
+          </div>
+
+          <!-- Bedroom Dropzone -->
+          <div id="zone-bedroom" class="dropzone bg-indigo-50 border-4 border-dashed border-indigo-300 rounded-xl relative flex flex-col items-center justify-between p-2" data-filled="false">
+            <span class="bg-indigo-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Bedroom</span>
+            <div class="absolute bottom-2 right-2 opacity-30">
+              <!-- Bed silhouette -->
+              <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M20 10V7c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v3c-1.1 0-2 .9-2 2v5h1.33L4 19h1.33l.67-2h12l.67 2H20l.67-2H22v-5c0-1.1-.9-2-2-2zm-9 0H6V7h5v3zm7 0h-5V7h5v3z"/></svg>
+            </div>
+            <span class="text-xs text-indigo-500 font-bold m-auto text-center pointer-events-none">Sister is sleepy and loves her toys!</span>
+          </div>
+
+          <!-- Garden Dropzone -->
+          <div id="zone-garden" class="dropzone bg-emerald-50 border-4 border-dashed border-emerald-300 rounded-xl relative flex flex-col items-center justify-between p-2" data-filled="false">
+            <span class="bg-emerald-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Garden</span>
+            <div class="absolute bottom-2 right-2 opacity-30">
+              <!-- Flower/Tree silhouette -->
+              <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            </div>
+            <span class="text-xs text-emerald-500 font-bold m-auto text-center pointer-events-none">Puppy wants to run on the green grass!</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- LEVEL 3: HOUSEHOLD ITEMS MATCH (Hidden by default) -->
+      <div id="level3" class="w-full h-full hidden flex-row items-center justify-between space-x-4">
+        
+        <!-- Drag Item Dock (Left Side) -->
+        <div class="w-1/3 bg-teal-50 border-4 border-dashed border-teal-300 rounded-2xl p-4 flex flex-col justify-around items-center h-full shadow-inner">
+          <h3 class="text-teal-600 font-extrabold text-base md:text-lg mb-1 text-center">Where do they belong?</h3>
+          
+          <div class="flex flex-wrap gap-2 md:gap-4 items-center justify-center w-full">
+            <!-- Bed -->
+            <div id="drag-bed" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-teal-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-bedroom3">
+              <svg class="w-12 h-12" viewBox="0 0 100 100">
+                <rect x="10" y="40" width="80" height="40" fill="#a7f3d0" stroke="#059669" stroke-width="3" rx="5" />
+                <rect x="15" y="25" width="30" height="20" fill="#ffffff" stroke="#059669" stroke-width="2" rx="3" />
+                <rect x="50" y="25" width="30" height="20" fill="#ffffff" stroke="#059669" stroke-width="2" rx="3" />
+                <line x1="10" y1="65" x2="10" y2="90" stroke="#059669" stroke-width="5" />
+                <line x1="90" y1="65" x2="90" y2="90" stroke="#059669" stroke-width="5" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Bed</span>
+            </div>
+
+            <!-- Frying Pan -->
+            <div id="drag-pan" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-teal-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-kitchen3">
+              <svg class="w-12 h-12" viewBox="0 0 100 100">
+                <ellipse cx="40" cy="55" rx="25" ry="18" fill="#4b5563" stroke="#1f2937" stroke-width="3"/>
+                <line x1="60" y1="45" x2="90" y2="20" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+                <ellipse cx="35" cy="52" rx="15" ry="10" fill="#9ca3af" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Frying Pan</span>
+            </div>
+
+            <!-- Teddy Bear -->
+            <div id="drag-teddy" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-teal-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-living3">
+              <svg class="w-12 h-12" viewBox="0 0 100 100">
+                <!-- Head & Ears -->
+                <circle cx="50" cy="45" r="22" fill="#b45309" stroke="#78350f" stroke-width="2"/>
+                <circle cx="32" cy="27" r="8" fill="#b45309" />
+                <circle cx="68" cy="27" r="8" fill="#b45309" />
+                <!-- Eyes -->
+                <circle cx="43" cy="42" r="3" fill="#111" />
+                <circle cx="57" cy="42" r="3" fill="#111" />
+                <!-- Snout -->
+                <ellipse cx="50" cy="51" rx="7" ry="5" fill="#fef3c7" />
+                <circle cx="50" cy="49" r="2" fill="#111" />
+                <!-- Body -->
+                <ellipse cx="50" cy="74" rx="24" ry="18" fill="#92400e" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Teddy Bear</span>
+            </div>
+
+            <!-- Watering Can -->
+            <div id="drag-pot" class="draggable bg-white p-2 rounded-xl shadow-md border-2 border-teal-200 flex flex-col items-center justify-center w-20 h-24 md:w-24 md:h-28" data-target="zone-garden3">
+              <svg class="w-12 h-12" viewBox="0 0 100 100">
+                <rect x="25" y="35" width="40" height="40" fill="#3b82f6" stroke="#1d4ed8" stroke-width="3" rx="5" />
+                <!-- Spout -->
+                <path d="M 65 55 L 90 40 L 92 48 L 65 65 Z" fill="#1d4ed8" />
+                <!-- Handle -->
+                <path d="M 25 45 Q 10 55 25 65" fill="none" stroke="#1d4ed8" stroke-width="4" />
+                <circle cx="91" cy="44" r="5" fill="#facc15" />
+              </svg>
+              <span class="text-xs font-bold text-gray-700 mt-1">Watering Can</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Four Rooms Layout again for Level 3 items -->
+        <div class="w-2/3 h-full grid grid-cols-2 grid-rows-2 gap-2 p-1 bg-teal-100 rounded-2xl border-4 border-teal-400 overflow-hidden relative shadow-inner">
+          
+          <!-- Kitchen Room Dropzone -->
+          <div id="zone-kitchen3" class="dropzone bg-rose-50 border-4 border-dashed border-rose-300 rounded-xl relative flex flex-col items-center justify-center p-2" data-filled="false">
+            <span class="bg-rose-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Kitchen</span>
+            <span class="text-xs text-rose-500 font-bold text-center pointer-events-none">Match the cooking tool!</span>
+          </div>
+
+          <!-- Living Room Dropzone -->
+          <div id="zone-living3" class="dropzone bg-blue-50 border-4 border-dashed border-blue-300 rounded-xl relative flex flex-col items-center justify-center p-2" data-filled="false">
+            <span class="bg-blue-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Living Room</span>
+            <span class="text-xs text-blue-500 font-bold text-center pointer-events-none">Match the comfy toy!</span>
+          </div>
+
+          <!-- Bedroom Dropzone -->
+          <div id="zone-bedroom3" class="dropzone bg-indigo-50 border-4 border-dashed border-indigo-300 rounded-xl relative flex flex-col items-center justify-center p-2" data-filled="false">
+            <span class="bg-indigo-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Bedroom</span>
+            <span class="text-xs text-indigo-500 font-bold text-center pointer-events-none">Match where we sleep!</span>
+          </div>
+
+          <!-- Garden Dropzone -->
+          <div id="zone-garden3" class="dropzone bg-emerald-50 border-4 border-dashed border-emerald-300 rounded-xl relative flex flex-col items-center justify-center p-2" data-filled="false">
+            <span class="bg-emerald-400 text-white px-2 py-0.5 rounded-full text-xs font-bold absolute top-1 left-1">Garden</span>
+            <span class="text-xs text-emerald-500 font-bold text-center pointer-events-none">Match the watering can!</span>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Custom On-Screen Interactive Feedback Messages -->
+    <div id="feedbackToast" class="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-8 py-3 rounded-full text-lg font-bold shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none flex items-center space-x-2 z-50">
+      <span>Yay! Super Job!</span>
+    </div>
+
+    <!-- Celebration/Game Over Screen Overlay (Hidden by default) -->
+    <div id="finishOverlay" class="absolute inset-0 bg-purple-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white p-6 hidden z-50">
+      <div class="bg-white text-purple-900 p-8 rounded-3xl max-w-md text-center border-8 border-yellow-400 shadow-2xl space-y-6 transform scale-90 transition-transform duration-500" id="victoryCard">
+        
+        <!-- Big Happy Sun & Family -->
+        <div class="flex justify-center">
+          <svg class="w-32 h-32 animate-spin" style="animation-duration: 20s;" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="20" fill="#fbbf24" stroke="#f59e0b" stroke-width="3" />
+            <!-- Sunrays -->
+            <path d="M 50 10 L 50 25 M 50 75 L 50 90 M 10 50 L 25 50 M 75 50 L 90 50 M 22 22 L 32 32 M 68 68 L 78 78 M 22 68 L 32 62 M 68 22 L 58 32" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" />
+          </svg>
+        </div>
+
+        <h2 class="text-4xl font-extrabold text-pink-500 tracking-wide">Awesome Work!</h2>
+        <p class="text-lg font-medium text-gray-700">You built the house, helped the family, and organized the rooms! You are a superstar! 🌟</p>
+        
+        <!-- Final Score Display -->
+        <div class="bg-yellow-50 py-3 px-6 rounded-2xl border-4 border-yellow-300 inline-block">
+          <span class="text-2xl font-bold text-yellow-600">Final Stars: <span id="finalScore">0</span> / 12 ⭐</span>
+        </div>
+
+        <!-- Restart Button -->
+        <button onclick="restartGame()" class="w-full bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white font-extrabold text-2xl py-4 rounded-2xl shadow-lg border-b-8 border-emerald-700 transform active:scale-95 transition-all">
+          Play Again! 🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Canvas for Level Complete Confetti -->
+    <canvas id="confettiCanvas" class="absolute inset-0 pointer-events-none hidden z-40"></canvas>
+
+    <!-- Bottom Instruction Bar with Help Text -->
+    <footer class="bg-purple-100 p-3 text-center border-t-4 border-purple-200">
+      <p id="footerInstructions" class="text-purple-900 font-extrabold text-sm md:text-base tracking-wide">
+        Drag the roof to the top of the house outline!
+      </p>
+    </footer>
+
+  </div>
+
+  <script>
+    /* =========================================
+       AUDIO ENGINE (Web Audio API Synthesizer)
+       ========================================= */
+    let audioCtx = null;
+    let bMusicNode = null;
+    let isMusicPlaying = false;
+    let musicInterval = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    // Play synthesized sound effects
+    function playSound(type) {
+      initAudio();
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'correct') {
+        // High, happy chime (two rising notes)
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.45);
+      } else if (type === 'incorrect') {
+        // Low, sad bonk
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.25);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'level_up') {
+        // Grand winning flourish
+        const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50]; // C4 to C6 arpeggio
+        notes.forEach((freq, idx) => {
+          const singleOsc = audioCtx.createOscillator();
+          const singleGain = audioCtx.createGain();
+          singleOsc.connect(singleGain);
+          singleGain.connect(audioCtx.destination);
+          singleOsc.type = 'sine';
+          singleOsc.frequency.setValueAtTime(freq, now + (idx * 0.08));
+          singleGain.gain.setValueAtTime(0.1, now + (idx * 0.08));
+          singleGain.gain.exponentialRampToValueAtTime(0.01, now + (idx * 0.08) + 0.3);
+          singleOsc.start(now + (idx * 0.08));
+          singleOsc.stop(now + (idx * 0.08) + 0.35);
+        });
+      }
+    }
+
+    // Gentle kindergarten background melody loop
+    function startBackgroundMusic() {
+      initAudio();
+      if (!audioCtx) return;
+
+      isMusicPlaying = true;
+      document.getElementById('musicOnIcon').classList.add('hidden');
+      document.getElementById('musicOffIcon').classList.remove('hidden');
+
+      const melody = [
+        261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66, // C, D, E, F, G, F, E, D
+        329.63, 349.23, 392.00, 440.00, 493.88, 440.00, 392.00, 349.23  // E, F, G, A, B, A, G, F
+      ];
+      let noteIndex = 0;
+
+      musicInterval = setInterval(() => {
+        if (!isMusicPlaying || !audioCtx) return;
+        
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = 'triangle'; // Soft kindergarten tone
+        osc.frequency.setValueAtTime(melody[noteIndex], now);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, now);
+
+        gain.gain.setValueAtTime(0.03, now); // Quiet background volume
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc.start(now);
+        osc.stop(now + 0.5);
+
+        noteIndex = (noteIndex + 1) % melody.length;
+      }, 500);
+    }
+
+    function stopBackgroundMusic() {
+      isMusicPlaying = false;
+      document.getElementById('musicOnIcon').classList.remove('hidden');
+      document.getElementById('musicOffIcon').classList.add('hidden');
+      if (musicInterval) {
+        clearInterval(musicInterval);
+        musicInterval = null;
+      }
+    }
+
+    function toggleMusic() {
+      if (isMusicPlaying) {
+        stopBackgroundMusic();
+      } else {
+        startBackgroundMusic();
+      }
+    }
+
+
+    /* =========================================
+       SPEECH OVER ENGINE (Kindergarten Helpers)
+       ========================================= */
+    function speakInstructions() {
+      const currentText = document.getElementById('footerInstructions').innerText;
+      if ('speechSynthesis' in window) {
+        // Cancel any active utterance
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(currentText);
+        utterance.rate = 0.85; // Speak slower for kindergarten learners
+        utterance.pitch = 1.2; // Slightly higher/friendly pitch
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+
+    /* =========================================
+       GAME STATE & LEVEL SYSTEM
+       ========================================= */
+    let currentLevel = 1;
+    let score = 0;
+    const levelGoals = {
+      1: 4, // 4 parts of the house
+      2: 4, // 4 family members
+      3: 4  // 4 room objects
+    };
+    let currentLevelMatches = 0;
+
+    // Level configs for instruction reading
+    const levelInstructions = {
+      1: "Let's build our happy house! Drag the roof, walls, door, and window to their matching grey shadows!",
+      2: "Great building! Now help our family find their favorite rooms! Drag Mom, Dad, Sister, and Puppy home!",
+      3: "Let's organize the rooms! Drag the Bed, Frying Pan, Teddy Bear, and Watering Can to the correct rooms!"
+    };
+
+    function updateScore(points) {
+      score += points;
+      document.getElementById('scoreDisplay').innerText = score;
+    }
+
+    function showLevel(levelNum) {
+      // Hide all levels
+      document.getElementById('level1').classList.add('hidden');
+      document.getElementById('level2').classList.add('hidden');
+      document.getElementById('level3').classList.add('hidden');
+
+      // Show requested level
+      document.getElementById('level' + levelNum).classList.remove('hidden');
+      currentLevel = levelNum;
+      currentLevelMatches = 0;
+
+      // Update instructions
+      const targetInstruction = levelInstructions[levelNum];
+      document.getElementById('footerInstructions').innerText = targetInstruction;
+      const bubble = document.getElementById('hintBubble');
+      if (levelNum === 1) bubble.innerText = "Let's build our happy house!";
+      if (levelNum === 2) bubble.innerText = "Where do family members live?";
+      if (levelNum === 3) bubble.innerText = "Match items to their rooms!";
+
+      // Speak instructions automatically for seamless visual-auditory connection
+      setTimeout(() => {
+        speakInstructions();
+      }, 500);
+    }
+
+
+    /* =========================================
+       DRAG AND DROP HANDLER (Pointer Events)
+       ========================================= */
+    let activeDragElement = null;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    function initDragAndDrop() {
+      const draggables = document.querySelectorAll('.draggable');
+      const dropzones = document.querySelectorAll('.dropzone');
+
+      draggables.forEach(draggable => {
+        draggable.addEventListener('pointerdown', onPointerDown);
+      });
+    }
+
+    function onPointerDown(e) {
+      // Prevent standard browser defaults (like highlighting)
+      e.preventDefault();
+      
+      activeDragElement = e.currentTarget;
+      activeDragElement.style.touchAction = 'none';
+
+      // Record baseline coordinates
+      const rect = activeDragElement.getBoundingClientRect();
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+
+      // Ensure the element has manual style positions if not set
+      if (!activeDragElement.style.left) {
+        activeDragElement.style.position = 'relative';
+        activeDragElement.style.left = '0px';
+        activeDragElement.style.top = '0px';
+      }
+
+      initialLeft = parseFloat(activeDragElement.style.left) || 0;
+      initialTop = parseFloat(activeDragElement.style.top) || 0;
+
+      // Set active pointer capture so drag is maintained outside target bounds
+      activeDragElement.setPointerCapture(e.pointerId);
+      activeDragElement.addEventListener('pointermove', onPointerMove);
+      activeDragElement.addEventListener('pointerup', onPointerUp);
+      activeDragElement.addEventListener('pointercancel', onPointerCancel);
+
+      // Scale up element slightly for satisfying drag feedback
+      activeDragElement.style.zIndex = "100";
+      activeDragElement.style.transform = "scale(1.15)";
+      activeDragElement.classList.add('shadow-xl');
+
+      // Highlight target dropzone
+      const targetId = activeDragElement.getAttribute('data-target');
+      const dropzone = document.getElementById(targetId);
+      if (dropzone) {
+        dropzone.classList.add('dropzone-active');
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!activeDragElement) return;
+
+      const deltaX = e.clientX - dragStartX;
+      const deltaY = e.clientY - dragStartY;
+
+      activeDragElement.style.left = `${initialLeft + deltaX}px`;
+      activeDragElement.style.top = `${initialTop + deltaY}px`;
+    }
+
+    function onPointerUp(e) {
+      if (!activeDragElement) return;
+
+      const targetId = activeDragElement.getAttribute('data-target');
+      const dropzone = document.getElementById(targetId);
+      
+      // Remove visual helper indicators
+      if (dropzone) {
+        dropzone.classList.remove('dropzone-active');
+      }
+
+      // Check collision/intersection
+      if (dropzone && isOverlapping(activeDragElement, dropzone)) {
+        // Success Match!
+        handleSuccess(activeDragElement, dropzone);
+      } else {
+        // Fail / Drop back
+        handleFailure(activeDragElement);
+      }
+
+      cleanupPointerEvents(e);
+    }
+
+    function onPointerCancel(e) {
+      handleFailure(activeDragElement);
+      cleanupPointerEvents(e);
+    }
+
+    function cleanupPointerEvents(e) {
+      if (activeDragElement) {
+        activeDragElement.releasePointerCapture(e.pointerId);
+        activeDragElement.removeEventListener('pointermove', onPointerMove);
+        activeDragElement.removeEventListener('pointerup', onPointerUp);
+        activeDragElement.removeEventListener('pointercancel', onPointerCancel);
+        activeDragElement.style.transform = "";
+        activeDragElement.classList.remove('shadow-xl');
+        activeDragElement = null;
+      }
+    }
+
+    // Geometry calculation to support high precision overlap matching
+    function isOverlapping(el1, el2) {
+      const rect1 = el1.getBoundingClientRect();
+      const rect2 = el2.getBoundingClientRect();
+
+      // Check if the center of element 1 is inside the bounding rectangle of element 2
+      const el1Center = {
+        x: rect1.left + rect1.width / 2,
+        y: rect1.top + rect1.height / 2
+      };
+
+      return (
+        el1Center.x >= rect2.left &&
+        el1Center.x <= rect2.right &&
+        el1Center.y >= rect2.top &&
+        el1Center.y <= rect2.bottom
+      );
+    }
+
+    /* =========================================
+       SUCCESS / FAILURE INTERACTIONS
+       ========================================= */
+    function handleSuccess(element, dropzone) {
+      playSound('correct');
+      updateScore(1);
+
+      // Trigger Confetti Pop on drop success
+      triggerLocalConfetti(dropzone);
+
+      // Disable dragging on completed element
+      element.removeEventListener('pointerdown', onPointerDown);
+      element.classList.remove('draggable', 'cursor-grab');
+      element.classList.add('pop-success');
+      
+      // Style placement in dropzone
+      element.style.position = "absolute";
+      element.style.left = "50%";
+      element.style.top = "50%";
+      element.style.transform = "translate(-50%, -50%) scale(1.1)";
+      element.style.zIndex = "10";
+      
+      // Put matched item inside the designated dropzone container
+      dropzone.appendChild(element);
+      dropzone.setAttribute('data-filled', 'true');
+
+      // Visual feedback toast
+      showToast("Wow! Excellent Match! 🌟");
+
+      currentLevelMatches++;
+
+      // Check if current level finished
+      if (currentLevelMatches >= levelGoals[currentLevel]) {
+        setTimeout(() => {
+          advanceLevel();
+        }, 1200);
+      }
+    }
+
+    function handleFailure(element) {
+      if (!element) return;
+      
+      playSound('incorrect');
+      element.classList.add('shake-fail');
+      showToast("Let's try again! You can do it! 💪");
+
+      // Snap back to home position
+      element.style.left = '0px';
+      element.style.top = '0px';
+      element.style.zIndex = "10";
+
+      setTimeout(() => {
+        element.classList.remove('shake-fail');
+      }, 500);
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('feedbackToast');
+      toast.innerText = message;
+      toast.style.opacity = "1";
+      setTimeout(() => {
+        toast.style.opacity = "0";
+      }, 1500);
+    }
+
+    function advanceLevel() {
+      playSound('level_up');
+      triggerFullConfetti();
+
+      if (currentLevel < 3) {
+        showToast(`Level ${currentLevel} Clear! Get ready... 🚀`);
+        setTimeout(() => {
+          showLevel(currentLevel + 1);
+        }, 1500);
+      } else {
+        // Game Completed
+        setTimeout(() => {
+          showFinishScreen();
+        }, 1000);
+      }
+    }
+
+
+    /* =========================================
+       CELEBRATION / CONFETTI ENGINE
+       ========================================= */
+    const canvas = document.getElementById('confettiCanvas');
+    const ctx = canvas.getContext('2d');
+    let confettiParticles = [];
+    let animationFrameId = null;
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    class Confetti {
+      constructor(x, y, color, isBurst = false) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 8 + 6;
+        this.speedX = isBurst ? (Math.random() - 0.5) * 12 : (Math.random() - 0.5) * 4;
+        this.speedY = isBurst ? (Math.random() - 0.5) * 12 - 5 : Math.random() * 3 + 2;
+        this.rotation = Math.random() * 360;
+        this.rotationSpeed = Math.random() * 4 - 2;
+        this.opacity = 1;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.rotation += this.rotationSpeed;
+        this.speedY += 0.08; // Gravity simulation
+        this.opacity -= 0.012;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate((this.rotation * Math.PI) / 180);
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.opacity;
+        ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+        ctx.restore();
+      }
+    }
+
+    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+
+    function triggerLocalConfetti(targetElement) {
+      canvas.classList.remove('hidden');
+      resizeCanvas();
+      
+      const rect = targetElement.getBoundingClientRect();
+      const parentRect = canvas.getBoundingClientRect();
+      const localX = (rect.left + rect.width / 2) - parentRect.left;
+      const localY = (rect.top + rect.height / 2) - parentRect.top;
+
+      for (let i = 0; i < 20; i++) {
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        confettiParticles.push(new Confetti(localX, localY, randomColor, true));
+      }
+
+      if (!animationFrameId) {
+        animateConfetti();
+      }
+    }
+
+    function triggerFullConfetti() {
+      canvas.classList.remove('hidden');
+      resizeCanvas();
+
+      for (let i = 0; i < 100; i++) {
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        confettiParticles.push(new Confetti(Math.random() * canvas.width, -10, randomColor, false));
+      }
+
+      if (!animationFrameId) {
+        animateConfetti();
+      }
+    }
+
+    function animateConfetti() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      confettiParticles.forEach((particle, idx) => {
+        particle.update();
+        particle.draw();
+        if (particle.opacity <= 0 || particle.y > canvas.height) {
+          confettiParticles.splice(idx, 1);
+        }
+      });
+
+      if (confettiParticles.length > 0) {
+        animationFrameId = requestAnimationFrame(animateConfetti);
+      } else {
+        canvas.classList.add('hidden');
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    }
+
+
+    /* =========================================
+       FINISH / RESET STATE MANAGEMENT
+       ========================================= */
+    // Capture home template layouts to completely restore interactive divs upon restart
+    let initialLvl1HTML = "";
+    let initialLvl2HTML = "";
+    let initialLvl3HTML = "";
+
+    window.onload = function() {
+      initialLvl1HTML = document.getElementById('level1').innerHTML;
+      initialLvl2HTML = document.getElementById('level2').innerHTML;
+      initialLvl3HTML = document.getElementById('level3').innerHTML;
+
+      initDragAndDrop();
+      showLevel(1);
+
+      // Start quiet musical ambiance automatically (most modern browsers require user action first;
+      // if blocked, the play button handles triggering context manually)
+      document.body.addEventListener('click', () => {
+        if (!isMusicPlaying && !audioCtx) {
+          startBackgroundMusic();
+        }
+      }, { once: true });
+    };
+
+    function showFinishScreen() {
+      document.getElementById('finalScore').innerText = score;
+      const overlay = document.getElementById('finishOverlay');
+      overlay.classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('victoryCard').style.transform = "scale(1)";
+      }, 50);
+    }
+
+    function restartGame() {
+      score = 0;
+      document.getElementById('scoreDisplay').innerText = score;
+      document.getElementById('finishOverlay').classList.add('hidden');
+      document.getElementById('victoryCard').style.transform = "scale(0.9)";
+      
+      // Reload pure DOM states
+      document.getElementById('level1').innerHTML = initialLvl1HTML;
+      document.getElementById('level2').innerHTML = initialLvl2HTML;
+      document.getElementById('level3').innerHTML = initialLvl3HTML;
+
+      // Reattach core draggable events
+      initDragAndDrop();
+      showLevel(1);
+    }
+  </script>
+</body>
+</html>
